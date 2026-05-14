@@ -9,6 +9,7 @@ export interface Entrepreneurship {
   name: string;
   description: string;
   whatsapp: string;
+  instagram?: string;
   images: string[];
   category: string;
   status: EntrepreneurshipStatus;

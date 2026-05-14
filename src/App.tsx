@@ -44,7 +44,8 @@ import {
   Menu,
   X,
   Camera,
-  Trash2
+  Trash2,
+  Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth } from './lib/firebase';
@@ -213,11 +214,27 @@ export default function App() {
 
   const login = async () => {
     try {
+      setErrorMsg(null);
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (e) {
-      console.error(e);
-      setErrorMsg("Error al iniciar sesión. Por favor intenta de nuevo.");
+      // Forzar selección de cuenta para evitar cierres automáticos si hay una sesión previa
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      console.log("Login successful:", result.user.email);
+    } catch (e: any) {
+      console.error("Login error details:", e);
+      let errorText = "Error al iniciar sesión.";
+      
+      if (e.code === 'auth/unauthorized-domain') {
+        errorText = "DOMINIO NO AUTORIZADO: Debes añadir 'reserva-del-prado-iii.vercel.app' en la Consola de Firebase (Authentication > Settings > Authorized domains).";
+      } else if (e.code === 'auth/popup-closed-by-user') {
+        errorText = "La ventana se cerró. Por favor, completa el proceso de inicio de sesión sin cerrar la ventana.";
+      } else if (e.code === 'auth/cancelled-popup-request') {
+        errorText = "Se canceló la solicitud de inicio de sesión.";
+      } else {
+        errorText = `Error: ${e.message || "Error desconocido en Firebase"}`;
+      }
+      
+      setErrorMsg(errorText);
     }
   };
 
@@ -336,6 +353,14 @@ export default function App() {
       </AnimatePresence>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {errorMsg && (
+          <div className="mb-8 bg-red-50 text-red-600 p-4 rounded-2xl border border-red-100 flex items-center justify-between shadow-sm">
+            <p className="text-sm font-medium">{errorMsg}</p>
+            <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-red-100 rounded-full transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {activeTab === 'resident' ? (
           <>
             <div className="mb-12">
@@ -519,13 +544,28 @@ export default function App() {
                           </div>
                           <span className="text-sm font-bold text-brand-blue">{item.residentName}</span>
                         </div>
-                        <a 
-                          href={`https://wa.me/${sanitizePhone(item.whatsapp)}?text=Hola! Vi tu negocio ${item.name} en la plataforma de Reserva del Prado III.`}
-                          target="_blank"
-                          className="w-12 h-12 rounded-full border-2 border-brand-green flex items-center justify-center text-brand-green hover:bg-brand-green hover:text-white transition-all shadow-md active:scale-95"
-                        >
-                          <Phone className="w-5 h-5" />
-                        </a>
+                        <div className="flex items-center gap-2">
+                          {item.instagram && (
+                            <a 
+                              href={item.instagram.startsWith('@') ? `https://instagram.com/${item.instagram.substring(1)}` : item.instagram}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-10 h-10 rounded-full border border-pink-100 flex items-center justify-center text-pink-500 hover:bg-pink-500 hover:text-white transition-all shadow-sm active:scale-95"
+                              title="Instagram"
+                            >
+                              <Instagram className="w-5 h-5" />
+                            </a>
+                          )}
+                          <a 
+                            href={`https://wa.me/${sanitizePhone(item.whatsapp)}?text=Hola! Vi tu negocio ${item.name} en la plataforma de Reserva del Prado III.`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-10 h-10 rounded-full border border-green-100 flex items-center justify-center text-brand-green hover:bg-brand-green hover:text-white transition-all shadow-sm active:scale-95"
+                            title="WhatsApp"
+                          >
+                            <Phone className="w-5 h-5" />
+                          </a>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -541,14 +581,6 @@ export default function App() {
           </>
         ) : (
           <div className="space-y-8">
-            {errorMsg && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-2xl border border-red-100 flex items-center justify-between animate-pulse">
-                <p className="text-sm font-medium">{errorMsg}</p>
-                <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-red-100 rounded-full">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
             <header className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-12">
               <div>
                 <h2 className="text-4xl font-bold mb-2">Gestión de Contenido</h2>
@@ -705,14 +737,29 @@ export default function App() {
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     const formData = new FormData(e.currentTarget);
+                    
+                    let finalImage = formData.get('imageUrl') as string;
+                    const fileInput = (e.currentTarget.elements.namedItem('imageFile') as HTMLInputElement);
+                    
+                    if (fileInput?.files && fileInput.files[0]) {
+                      const file = fileInput.files[0];
+                      // Simple conversion to base64 for the demo prototype
+                      const reader = new FileReader();
+                      finalImage = await new Promise((resolve) => {
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                      });
+                    }
+
                     const docData = {
                       name: formData.get('name') as string,
                       description: formData.get('description') as string,
                       category: formData.get('category') as string,
                       whatsapp: formData.get('whatsapp') as string,
+                      instagram: formData.get('instagram') as string || "",
                       residentName: formData.get('residentName') as string,
                       unitNumber: formData.get('unitNumber') as string,
-                      images: [formData.get('imageUrl') as string || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=1000&auto=format&fit=crop'],
+                      images: [finalImage || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=1000&auto=format&fit=crop'],
                       status: EntrepreneurshipStatus.PENDING,
                       createdAt: serverTimestamp(),
                       updatedAt: serverTimestamp()
@@ -720,7 +767,7 @@ export default function App() {
                     try {
                       await addDoc(collection(db, 'entrepreneurships'), docData);
                       setIsModalOpen(false);
-                      setSearchTerm(""); // Reset search or something to show the new item?
+                      setSearchTerm("");
                     } catch (e) {
                       setErrorMsg("No se pudo enviar la solicitud. Revisa tu conexión.");
                       handleFirestoreError(e, OperationType.CREATE, 'entrepreneurships');
@@ -739,8 +786,12 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">WhatsApp</label>
-                        <input name="whatsapp" required className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none" />
+                        <input name="whatsapp" required placeholder="Ej: 300 123 4567" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none" />
                       </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block text-brand-green">Instagram (Opcional)</label>
+                      <input name="instagram" placeholder="@tu_cuenta" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 focus:border-brand-green/30 outline-none" />
                     </div>
                     <div>
                       <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">Descripción</label>
@@ -756,12 +807,28 @@ export default function App() {
                         <input name="unitNumber" required className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none" />
                       </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">URL Imagen</label>
-                      <input name="imageUrl" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none" />
+                    <div className="pt-2">
+                      <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-3 block">Imagen del Negocio</label>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-center w-full">
+                          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                              <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                              <p className="text-xs text-gray-500 font-medium">Subir desde galería o equipo</p>
+                            </div>
+                            <input name="imageFile" type="file" accept="image/*" className="hidden" />
+                          </label>
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <span className="text-[10px] font-bold text-gray-400">O URL:</span>
+                          </div>
+                          <input name="imageUrl" placeholder="https://..." className="w-full pl-16 pr-5 py-2 text-xs rounded-xl bg-gray-50 border border-gray-100 outline-none italic" />
+                        </div>
+                      </div>
                     </div>
-                    <button type="submit" className="w-full bg-brand-green text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-lg">
-                      Enviar Solicitud
+                    <button type="submit" className="w-full bg-brand-green text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-lg active:scale-[0.98]">
+                      Enviar para Revisión
                     </button>
                   </form>
                 </div>
