@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "entrepreneurship": {
+      "title": "Entrepreneurship",
+      "description": "A resident's business submission",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Business name" },
+        "description": { "type": "string", "description": "Detailed description" },
+        "whatsapp": { "type": "string", "description": "Contact phone number" },
+        "images": { "type": "array", "items": { "type": "string" }, "description": "List of image URLs" },
+        "category": { "type": "string", "description": "Business category (food, services, etc)" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Approval status" },
+        "residentName": { "type": "string", "description": "Name of the person responsible" },
+        "unitNumber": { "type": "string", "description": "Apartment or house number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "whatsapp", "status", "residentName", "unitNumber", "createdAt", "updatedAt"]
+    },
+    "config": {
+      "title": "Configuration",
+      "description": "Global links and contact info",
+      "type": "object",
+      "properties": {
+        "gateWhatsapp": { "type": "string" },
+        "adminWhatsapp": { "type": "string" },
+        "paymentLinks": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/entrepreneurships/{id}": {
+      "schema": "entrepreneurship",
+      "description": "Collection of business submissions"
+    },
+    "/configs/main": {
+      "schema": "config",
+      "description": "Single document for global settings"
+    }
+  }
+}
