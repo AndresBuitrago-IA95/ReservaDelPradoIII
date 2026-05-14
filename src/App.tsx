@@ -107,6 +107,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -744,6 +745,10 @@ export default function App() {
                 <div className="md:col-span-3 p-8 sm:p-12 overflow-y-auto max-h-[90vh]">
                   <form onSubmit={async (e) => {
                     e.preventDefault();
+                    if (isSubmitting) return;
+                    setIsSubmitting(true);
+                    setErrorMsg(null);
+                    
                     const formData = new FormData(e.currentTarget);
                     
                     let finalImage = formData.get('imageUrl') as string;
@@ -751,19 +756,55 @@ export default function App() {
                     
                     if (fileInput?.files && fileInput.files[0]) {
                       const file = fileInput.files[0];
-                      // Simple conversion to base64 for the demo prototype
-                      const reader = new FileReader();
-                      finalImage = await new Promise((resolve) => {
-                        reader.onloadend = () => resolve(reader.result as string);
-                        reader.readAsDataURL(file);
-                      });
+                      try {
+                        const reader = new FileReader();
+                        const rawImage: string = await new Promise((resolve, reject) => {
+                          reader.onload = () => resolve(reader.result as string);
+                          reader.onerror = reject;
+                          reader.readAsDataURL(file);
+                        });
+
+                        // Resize image to ensure it's within Firestore limits
+                        finalImage = await new Promise((resolve) => {
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const max_size = 1200; // Max dimension
+
+                            if (width > height) {
+                              if (width > max_size) {
+                                height *= max_size / width;
+                                width = max_size;
+                              }
+                            } else {
+                              if (height > max_size) {
+                                width *= max_size / height;
+                                height = max_size;
+                              }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.7)); // 0.7 quality
+                          };
+                          img.src = rawImage;
+                        });
+                      } catch (err) {
+                        console.error("Error processing image:", err);
+                        setErrorMsg("Error al procesar la imagen. Intenta con otra.");
+                        setIsSubmitting(false);
+                        return;
+                      }
                     }
 
                     const docData = {
                       name: formData.get('name') as string,
                       description: formData.get('description') as string,
                       category: formData.get('category') as string,
-                      whatsapp: formData.get('whatsapp') as string,
+                      whatsapp: sanitizePhone(formData.get('whatsapp') as string),
                       instagram: formData.get('instagram') as string || "",
                       residentName: formData.get('residentName') as string,
                       unitNumber: formData.get('unitNumber') as string,
@@ -776,9 +817,19 @@ export default function App() {
                       await addDoc(collection(db, 'entrepreneurships'), docData);
                       setIsModalOpen(false);
                       setSearchTerm("");
-                    } catch (e) {
-                      setErrorMsg("No se pudo enviar la solicitud. Revisa tu conexión.");
+                      alert("¡Solicitud enviada con éxito! Estará visible una vez sea aprobada por administración.");
+                    } catch (e: any) {
+                      console.error("Upload error:", e);
+                      let msg = "No se pudo enviar la solicitud.";
+                      if (e.message?.includes('too large')) {
+                        msg = "La imagen es demasiado grande. Por favor intenta con una más pequeña o usa un link.";
+                      } else if (e.code === 'permission-denied') {
+                        msg = "Error de permisos. Revisa que todos los campos obligatorios estén llenos correctamente.";
+                      }
+                      setErrorMsg(msg);
                       handleFirestoreError(e, OperationType.CREATE, 'entrepreneurships');
+                    } finally {
+                      setIsSubmitting(false);
                     }
                   }} className="space-y-5">
                     <div>
@@ -835,8 +886,19 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-brand-green text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-lg active:scale-[0.98]">
-                      Enviar para Revisión
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="w-full bg-brand-green text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        "Enviar para Revisión"
+                      )}
                     </button>
                   </form>
                 </div>
