@@ -424,7 +424,7 @@ export default function App() {
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Pagos PSE</p>
-                  <div className="flex flex-col gap-1 mt-1">
+                  <div className="flex flex-col gap-2 mt-2">
                     {(config?.paymentLinks || [
                       { label: "Administración", url: "#" },
                       { label: "Agua/Acueducto", url: "https://www.psepagos.co/PSEHostingUI/ShowTicketOffice.aspx?ID=13995" }
@@ -434,7 +434,7 @@ export default function App() {
                         href={link.url} 
                         target="_blank" 
                         rel="noreferrer"
-                        className="text-xs font-bold text-brand-blue hover:underline"
+                        className="w-full text-[10px] font-bold text-center bg-brand-blue text-white py-2 px-3 rounded-xl hover:shadow-md hover:brightness-110 transition-all active:scale-95"
                       >
                         {link.label}
                       </a>
