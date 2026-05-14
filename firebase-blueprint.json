@@ -18,6 +18,22 @@
       },
       "required": ["name", "description", "whatsapp", "status", "residentName", "unitNumber", "createdAt", "updatedAt"]
     },
+    "announcement": {
+      "title": "Announcement",
+      "description": "A resident's personal or community announcement",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "residentName": { "type": "string" },
+        "unitNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["description", "mediaUrl", "mediaType", "residentName", "unitNumber", "status", "createdAt", "expiresAt"]
+    },
     "config": {
       "title": "Configuration",
       "description": "Global links and contact info",
@@ -42,6 +58,10 @@
     "/entrepreneurships/{id}": {
       "schema": "entrepreneurship",
       "description": "Collection of business submissions"
+    },
+    "/announcements/{id}": {
+      "schema": "announcement",
+      "description": "Collection of resident announcements"
     },
     "/configs/main": {
       "schema": "config",

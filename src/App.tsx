@@ -45,11 +45,14 @@ import {
   X,
   Camera,
   Trash2,
-  Instagram
+  Instagram,
+  Video,
+  Bell,
+  Megaphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth } from './lib/firebase';
-import { Entrepreneurship, EntrepreneurshipStatus, AppConfig, OperationType } from './types';
+import { Entrepreneurship, EntrepreneurshipStatus, AppConfig, OperationType, Announcement, AnnouncementStatus } from './types';
 import { handleFirestoreError, cn } from './lib/utils';
 
 // Constantes
@@ -102,11 +105,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [entrepreneurships, setEntrepreneurships] = useState<Entrepreneurship[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [activeTab, setActiveTab] = useState<'resident' | 'admin'>('resident');
+  const [adminTab, setAdminTab] = useState<'entrepreneurships' | 'announcements' | 'config'>('entrepreneurships');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -171,6 +177,30 @@ export default function App() {
       if (error.code === 'failed-precondition') {
         console.warn("Index needed for this query");
       }
+    });
+
+    return unsubscribe;
+  }, [isAdmin, activeTab]);
+
+  // Sync Announcements
+  useEffect(() => {
+    let q;
+    if (isAdmin && activeTab === 'admin') {
+      q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
+    } else {
+      q = query(
+        collection(db, 'announcements'), 
+        where('status', '==', AnnouncementStatus.APPROVED),
+        where('expiresAt', '>', new Date()),
+        orderBy('expiresAt', 'desc')
+      );
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
+      setAnnouncements(data);
+    }, (error) => {
+      console.error("Announcements error:", error);
     });
 
     return unsubscribe;
@@ -415,6 +445,86 @@ export default function App() {
               </div>
             </div>
 
+            {/* Sección de Anuncios */}
+            <div className="mb-16">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h3 className="text-2xl font-bold flex items-center gap-2 text-brand-blue">
+                    <Megaphone className="text-brand-green w-6 h-6" />
+                    Anuncios de la Comunidad
+                  </h3>
+                  <p className="text-gray-500 text-sm">Avisos importantes y novedades de tus vecinos (vigencia 7 días)</p>
+                </div>
+                <button 
+                  onClick={() => setIsAnnouncementModalOpen(true)}
+                  className="bg-brand-blue text-white px-6 py-3 rounded-full text-sm font-bold hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 whitespace-nowrap"
+                >
+                  <Bell className="w-4 h-4" />
+                  Publicar Anuncio
+                </button>
+              </div>
+
+              {announcements.length === 0 ? (
+                <div className="bg-gray-50 border border-dashed border-gray-200 rounded-[2.5rem] p-12 text-center">
+                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-gray-300 mx-auto mb-4 shadow-sm">
+                    <Bell className="w-8 h-8" />
+                  </div>
+                  <p className="text-gray-500 font-medium">No hay anuncios activos en este momento.</p>
+                </div>
+              ) : (
+                <div className="flex gap-6 overflow-x-auto pb-6 -mx-4 px-4 scrollbar-hide">
+                  {announcements.map((ann) => (
+                    <motion.div 
+                      key={ann.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="min-w-[280px] md:min-w-[320px] bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm flex flex-col group hover:shadow-md transition-all"
+                    >
+                      <div className="aspect-square relative overflow-hidden bg-gray-100">
+                        {ann.mediaType === 'video' ? (
+                          <video 
+                            src={ann.mediaUrl} 
+                            className="w-full h-full object-cover"
+                            controls={false}
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                          />
+                        ) : (
+                          <img 
+                            src={ann.mediaUrl} 
+                            alt={ann.description}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        )}
+                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-[10px] font-bold text-brand-blue shadow-sm">
+                          Residente {ann.unitNumber}
+                        </div>
+                        {ann.mediaType === 'video' && (
+                          <div className="absolute top-4 right-4 bg-black/40 p-2 rounded-full text-white backdrop-blur-sm">
+                            <Video className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-6 flex-1 flex flex-col justify-between">
+                        <p className="text-sm text-gray-700 font-medium line-clamp-3 mb-6 leading-relaxed">
+                          {ann.description}
+                        </p>
+                        <div className="flex items-center justify-between border-t border-gray-50 pt-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                          <span className="text-brand-green">{ann.residentName}</span>
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3 h-3" />
+                            {ann.expiresAt?.toDate ? ann.expiresAt.toDate().toLocaleDateString() : 'Activo'}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
               <div className="bg-white p-6 rounded-3xl border border-[#e5e1da] flex items-center gap-4">
                 <div className="w-12 h-12 bg-brand-green-light rounded-2xl flex items-center justify-center text-brand-green">
@@ -590,120 +700,215 @@ export default function App() {
           </>
         ) : (
           <div className="space-y-8">
-            <header className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-12">
+            <header className="flex flex-col lg:flex-row justify-between lg:items-center gap-6 mb-12">
               <div>
-                <h2 className="text-4xl font-bold mb-2">Gestión de Contenido</h2>
-                <p className="text-gray-500">Revisa y aprueba solicitudes de residentes.</p>
+                <h2 className="text-4xl font-bold mb-2 text-brand-blue">Gestión de Contenido</h2>
+                <div className="flex items-center gap-2 text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-brand-green" />
+                  <span className="text-sm font-medium italic">Panel Administrativo</span>
+                </div>
               </div>
-              <div className="flex gap-4">
-                <div className="bg-white border border-[#e5e1da] px-6 py-3 rounded-2xl">
-                  <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-1">Total</p>
-                  <p className="text-2xl font-bold">{entrepreneurships.length}</p>
-                </div>
-                <div className="bg-white border border-[#e5e1da] px-6 py-3 rounded-2xl">
-                  <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-1">Pendientes</p>
-                  <p className="text-2xl font-bold text-amber-600">
-                    {entrepreneurships.filter(e => e.status === EntrepreneurshipStatus.PENDING).length}
-                  </p>
-                </div>
+              
+              <div className="flex bg-gray-100 p-1.5 rounded-2xl shadow-inner">
+                <button 
+                  onClick={() => setAdminTab('entrepreneurships')}
+                  className={cn(
+                    "px-6 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+                    adminTab === 'entrepreneurships' ? "bg-white text-brand-blue shadow-md" : "text-gray-400 hover:text-gray-600"
+                  )}
+                >
+                  <Store className="w-4 h-4" />
+                  Negocios ({entrepreneurships.length})
+                </button>
+                <button 
+                  onClick={() => setAdminTab('announcements')}
+                  className={cn(
+                    "px-6 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+                    adminTab === 'announcements' ? "bg-white text-brand-blue shadow-md" : "text-gray-400 hover:text-gray-600"
+                  )}
+                >
+                  <Megaphone className="w-4 h-4" />
+                  Anuncios ({announcements.length})
+                </button>
+                <button 
+                  onClick={() => setAdminTab('config')}
+                  className={cn(
+                    "px-6 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+                    adminTab === 'config' ? "bg-white text-brand-blue shadow-md" : "text-gray-400 hover:text-gray-600"
+                  )}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Ajustes
+                </button>
               </div>
             </header>
 
-            {/* Config Form for Admin */}
-            <div className="bg-brand-blue text-white rounded-[2.5rem] p-8 md:p-12 mb-12 shadow-2xl">
-              <h3 className="text-2xl font-bold mb-6 italic serif">Ajustes - Reserva del Prado III</h3>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                updateConfig({
-                  gateWhatsapp: formData.get('gateWhatsapp') as string,
-                  adminWhatsapp: '', // Removed per request
-                  adminEmail: formData.get('adminEmail') as string,
-                  adminHours: formData.get('adminHours') as string,
-                  paymentLinks: [
-                    { label: "Administración", url: "#" },
-                    { label: "Agua/Acueducto", url: formData.get('waterLink') as string }
-                  ]
-                });
-              }} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">WhatsApp Portería</label>
-                  <input name="gateWhatsapp" defaultValue={config?.gateWhatsapp} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Email Admin</label>
-                  <input name="adminEmail" defaultValue={config?.adminEmail} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Horarios Admin</label>
-                  <input name="adminHours" defaultValue={config?.adminHours} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Link Agua (PSE)</label>
-                  <input 
-                    name="waterLink" 
-                    defaultValue={config?.paymentLinks?.find(l => l.label === "Agua/Acueducto")?.url || "https://www.psepagos.co/PSEHostingUI/ShowTicketOffice.aspx?ID=13995"} 
-                    className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" 
-                  />
-                </div>
-                <button type="submit" className="bg-brand-green text-white font-bold py-3 px-6 rounded-xl hover:brightness-110 transition-all">
-                  Guardar Cambios
-                </button>
-              </form>
-            </div>
-
-            <div className="grid gap-6">
-              {entrepreneurships.map(item => (
-                <div key={item.id} className="bg-white border border-[#e5e1da] rounded-3xl p-6 flex flex-col md:flex-row gap-8 items-center shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-full md:w-48 h-32 rounded-2xl bg-gray-100 overflow-hidden shrink-0">
-                    <img src={item.images[0]} alt="" className="w-full h-full object-cover" />
+            {adminTab === 'config' && (
+              <div className="bg-brand-blue text-white rounded-[2.5rem] p-8 md:p-12 mb-12 shadow-2xl">
+                <h3 className="text-2xl font-bold mb-6 italic serif text-brand-green">Ajustes - Reserva del Prado III</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  updateConfig({
+                    gateWhatsapp: formData.get('gateWhatsapp') as string,
+                    adminWhatsapp: '', 
+                    adminEmail: formData.get('adminEmail') as string,
+                    adminHours: formData.get('adminHours') as string,
+                    paymentLinks: [
+                      { label: "Administración", url: "#" },
+                      { label: "Agua/Acueducto", url: formData.get('waterLink') as string }
+                    ]
+                  });
+                }} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">WhatsApp Portería</label>
+                    <input name="gateWhatsapp" defaultValue={config?.gateWhatsapp} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
                   </div>
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex items-center gap-3">
-                      <h4 className="text-lg font-bold">{item.name}</h4>
-                      <div className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider",
-                        item.status === EntrepreneurshipStatus.APPROVED ? "bg-green-100 text-green-700" :
-                        item.status === EntrepreneurshipStatus.REJECTED ? "bg-red-100 text-red-700" :
-                        "bg-amber-100 text-amber-700"
-                      )}>
-                        {item.status}
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Email Admin</label>
+                    <input name="adminEmail" defaultValue={config?.adminEmail} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Horarios Admin</label>
+                    <input name="adminHours" defaultValue={config?.adminHours} className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] uppercase font-bold text-white/60 tracking-wider mb-2 block">Link Agua (PSE)</label>
+                    <input 
+                      name="waterLink" 
+                      defaultValue={config?.paymentLinks?.find(l => l.label === "Agua/Acueducto")?.url || "https://www.psepagos.co/PSEHostingUI/ShowTicketOffice.aspx?ID=13995"} 
+                      className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-green" 
+                    />
+                  </div>
+                  <button type="submit" className="bg-brand-green text-white font-bold py-3 px-6 rounded-xl hover:brightness-110 transition-all">
+                    Guardar Cambios
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {adminTab === 'entrepreneurships' && (
+              <div className="grid gap-6">
+                {entrepreneurships.map(item => (
+                  <div key={item.id} className="bg-white border border-gray-100 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 items-center shadow-sm hover:shadow-xl transition-all">
+                    <div className="w-full md:w-48 h-32 rounded-2xl bg-gray-100 overflow-hidden shrink-0">
+                      <img src={item.images[0]} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="flex items-center gap-3">
+                        <h4 className="text-xl font-bold text-brand-blue">{item.name}</h4>
+                        <div className={cn(
+                          "text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider",
+                          item.status === EntrepreneurshipStatus.APPROVED ? "bg-green-100 text-green-700" :
+                          item.status === EntrepreneurshipStatus.REJECTED ? "bg-red-100 text-red-700" :
+                          "bg-amber-100 text-amber-700"
+                        )}>
+                          {item.status}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500 line-clamp-1 italic italic italic italic italic italic">"{item.description}"</p>
+                      <div className="flex gap-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                        <span className="flex items-center gap-1.5"><Store className="w-3.5 h-3.5 text-brand-green"/> {item.category}</span>
+                        <span className="flex items-center gap-1.5"><Info className="w-3.5 h-3.5 text-brand-blue"/> Residente {item.unitNumber}</span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-500 line-clamp-1">{item.description}</p>
-                    <div className="flex gap-4 text-xs text-gray-400">
-                      <span className="flex items-center gap-1"><Store className="w-3 h-3"/> {item.category}</span>
-                      <span className="flex items-center gap-1"><Info className="w-3 h-3"/> {item.unitNumber}</span>
-                    </div>
-                  </div>
-                    <div className="flex gap-2 w-full md:w-auto">
-                      {item.status !== EntrepreneurshipStatus.APPROVED && (
+                      <div className="flex gap-3 w-full md:w-auto">
+                        {item.status !== EntrepreneurshipStatus.APPROVED && (
+                          <button 
+                            onClick={async () => {
+                              try {
+                                await updateDoc(doc(db, 'entrepreneurships', item.id), { 
+                                  status: EntrepreneurshipStatus.APPROVED,
+                                  updatedAt: serverTimestamp()
+                                });
+                              } catch (err) { handleFirestoreError(err, OperationType.UPDATE, 'entrepreneurships'); }
+                            }}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-green text-white px-6 py-3 rounded-2xl font-bold text-xs hover:brightness-110 shadow-md transition-all active:scale-95"
+                          >
+                            <CheckCircle2 className="w-4 h-4" /> Aprobar
+                          </button>
+                        )}
                         <button 
-                          onClick={() => handleApprove(item.id, EntrepreneurshipStatus.APPROVED)}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2.5 rounded-xl hover:bg-green-600 transition-colors"
+                          onClick={async () => {
+                            if (confirm("¿Seguro que quieres eliminar este negocio?")) {
+                              try {
+                                await deleteDoc(doc(db, 'entrepreneurships', item.id));
+                              } catch (err) { handleFirestoreError(err, OperationType.DELETE, 'entrepreneurships'); }
+                            }
+                          }}
+                          className="w-14 h-14 rounded-2xl border border-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-all active:scale-95"
+                          title="Eliminar solicitud"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {adminTab === 'announcements' && (
+              <div className="grid gap-6">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="bg-white border border-gray-100 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 items-center shadow-sm hover:shadow-xl transition-all">
+                    <div className="w-full md:w-48 h-32 rounded-2xl bg-gray-100 overflow-hidden shrink-0 relative">
+                      {ann.mediaType === 'video' ? (
+                         <video src={ann.mediaUrl} className="w-full h-full object-cover" />
+                      ) : (
+                         <img src={ann.mediaUrl} alt="" className="w-full h-full object-cover" />
+                      )}
+                      <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm p-1 rounded-lg text-white">
+                        {ann.mediaType === 'video' ? <Video className="w-3 h-3" /> : <Camera className="w-3 h-3" />}
+                      </div>
+                    </div>
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider",
+                          ann.status === AnnouncementStatus.APPROVED ? "bg-green-100 text-green-700" :
+                          "bg-amber-100 text-amber-700"
+                        )}>
+                          Anuncio {ann.status}
+                        </div>
+                        <span className="text-xs text-gray-400 font-bold">Vence: {ann.expiresAt?.toDate?.() ? ann.expiresAt.toDate().toLocaleDateString() : 'Pendiente'}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 line-clamp-1 italic italic">"{ann.description}"</p>
+                      <div className="flex gap-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                        <span className="flex items-center gap-1.5"><PlusCircle className="w-3.5 h-3.5 text-brand-green"/> {ann.residentName}</span>
+                        <span className="flex items-center gap-1.5"><Info className="w-3.5 h-3.5 text-brand-blue"/> Apto {ann.unitNumber}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 w-full md:w-auto">
+                      {ann.status !== AnnouncementStatus.APPROVED && (
+                        <button 
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, 'announcements', ann.id), { status: AnnouncementStatus.APPROVED });
+                            } catch (err) { handleFirestoreError(err, OperationType.UPDATE, 'announcements'); }
+                          }}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-green text-white px-6 py-3 rounded-2xl font-bold text-xs hover:brightness-110 shadow-md transition-all active:scale-95"
                         >
                           <CheckCircle2 className="w-4 h-4" /> Aprobar
                         </button>
                       )}
-                      {item.status !== EntrepreneurshipStatus.REJECTED && (
-                        <button 
-                          onClick={() => handleApprove(item.id, EntrepreneurshipStatus.REJECTED)}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-50 text-amber-600 border border-amber-100 px-4 py-2.5 rounded-xl hover:bg-amber-100 transition-colors"
-                        >
-                          <XCircle className="w-4 h-4" /> Rechazar
-                        </button>
-                      )}
                       <button 
-                        onClick={() => handleDelete(item.id)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-100 px-4 py-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
-                        title="Eliminar solicitud"
+                        onClick={async () => {
+                          if (confirm("¿Eliminar este anuncio?")) {
+                            try {
+                              await deleteDoc(doc(db, 'announcements', ann.id));
+                            } catch (err) { handleFirestoreError(err, OperationType.DELETE, 'announcements'); }
+                          }
+                        }}
+                        className="w-14 h-14 rounded-2xl border border-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-all active:scale-95"
+                        title="Eliminar anuncio"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -902,6 +1107,166 @@ export default function App() {
                     </button>
                   </form>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para Publicar Anuncio */}
+      <AnimatePresence>
+        {isAnnouncementModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAnnouncementModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-2xl font-bold text-brand-blue">Publicar Anuncio</h3>
+                  <button onClick={() => setIsAnnouncementModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <X />
+                  </button>
+                </div>
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (isSubmitting) return;
+                  setIsSubmitting(true);
+                  setErrorMsg(null);
+
+                  const formData = new FormData(e.currentTarget);
+                  const fileInput = (e.currentTarget.elements.namedItem('annMediaFile') as HTMLInputElement);
+                  
+                  let finalMediaUrl = "";
+                  let mediaType: 'image' | 'video' = 'image';
+
+                  const file = fileInput?.files?.[0];
+                  if (file) {
+                    if (file.type.startsWith('video/')) mediaType = 'video';
+                    
+                    const reader = new FileReader();
+                    const rawMedia: string = await new Promise((resolve, reject) => {
+                      reader.onload = () => resolve(reader.result as string);
+                      reader.onerror = reject;
+                      reader.readAsDataURL(file);
+                    });
+
+                    if (mediaType === 'image') {
+                      // Resize and compress image
+                      finalMediaUrl = await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                          const canvas = document.createElement('canvas');
+                          let width = img.width;
+                          let height = img.height;
+                          const max_size = 1200;
+
+                          if (width > height) {
+                            if (width > max_size) {
+                              height *= max_size / width;
+                              width = max_size;
+                            }
+                          } else {
+                            if (height > max_size) {
+                              width *= max_size / height;
+                              height = max_size;
+                            }
+                          }
+                          canvas.width = width;
+                          canvas.height = height;
+                          const ctx = canvas.getContext('2d');
+                          ctx?.drawImage(img, 0, 0, width, height);
+                          resolve(canvas.toDataURL('image/jpeg', 0.6));
+                        };
+                        img.src = rawMedia;
+                      });
+                    } else {
+                      // For video, we just use base64 (not ideal for large videos, but okay for a demo prototype)
+                      finalMediaUrl = rawMedia;
+                      if (finalMediaUrl.length > 2000000) { 
+                         setErrorMsg("El video o imagen es demasiado grande. Intenta con un archivo más pequeño.");
+                         setIsSubmitting(false);
+                         return;
+                      }
+                    }
+                  } else {
+                    setErrorMsg("Debes subir una foto o video.");
+                    setIsSubmitting(false);
+                    return;
+                  }
+
+                  const now = new Date();
+                  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+                  const annData = {
+                    description: formData.get('description') as string,
+                    mediaUrl: finalMediaUrl,
+                    mediaType,
+                    residentName: formData.get('residentName') as string,
+                    unitNumber: formData.get('unitNumber') as string,
+                    status: AnnouncementStatus.PENDING,
+                    createdAt: serverTimestamp(),
+                    expiresAt: sevenDaysLater
+                  };
+
+                  try {
+                    await addDoc(collection(db, 'announcements'), annData);
+                    setIsAnnouncementModalOpen(false);
+                    alert("¡Anuncio enviado! Será publicado luego de ser aprobado por administración.");
+                  } catch (e: any) {
+                    console.error("Ann error:", e);
+                    setErrorMsg("No se pudo enviar el anuncio. El archivo es probablemente demasiado grande para el sistema.");
+                    handleFirestoreError(e, OperationType.CREATE, 'announcements');
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }} className="space-y-5">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">Descripción del Anuncio</label>
+                    <textarea name="description" required rows={3} placeholder="¿Qué quieres anunciar?" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none resize-none focus:bg-white" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">Tu Nombre</label>
+                      <input name="residentName" required className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none focus:bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">Torre/Apartamento</label>
+                      <input name="unitNumber" required className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 outline-none focus:bg-white" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Foto o Video (Máximo 1MB)</label>
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                        <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                        <p className="text-xs text-gray-500 font-medium">Click para subir foto o video</p>
+                        <p className="text-[9px] text-gray-400 mt-1 italic">Vigencia: 7 días desde hoy</p>
+                      </div>
+                      <input name="annMediaFile" type="file" accept="image/*,video/*" className="hidden" required />
+                    </label>
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="w-full bg-brand-blue text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                  >
+                    {isSubmitting ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</> : "Publicar para Revisión"}
+                  </button>
+                </form>
               </div>
             </motion.div>
           </div>

@@ -4,6 +4,24 @@ export enum EntrepreneurshipStatus {
   REJECTED = 'rejected'
 }
 
+export enum AnnouncementStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected'
+}
+
+export interface Announcement {
+  id: string;
+  description: string;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
+  residentName: string;
+  unitNumber: string;
+  status: AnnouncementStatus;
+  createdAt: any;
+  expiresAt: any;
+}
+
 export interface Entrepreneurship {
   id: string;
   name: string;

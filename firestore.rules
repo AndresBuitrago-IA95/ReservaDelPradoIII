@@ -31,6 +31,16 @@ service cloud.firestore {
              data.status in ['pending', 'approved', 'rejected'];
     }
 
+    // Validation for announcement
+    function isValidAnnouncement(data) {
+      return data.description is string && data.description.size() > 0 && data.description.size() <= 1000 &&
+             data.mediaUrl is string &&
+             data.mediaType in ['image', 'video'] &&
+             data.residentName is string && data.residentName.size() > 0 &&
+             data.unitNumber is string && data.unitNumber.size() > 0 &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
     match /admins/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow create: if isSignedIn() && request.auth.token.email == 'andrezbuitrago82@gmail.com' && request.auth.uid == userId;
@@ -49,6 +59,22 @@ service cloud.firestore {
       allow update: if isAdmin() && 
                       isValidEntrepreneurship(request.resource.data) &&
                       request.resource.data.updatedAt == request.time;
+      
+      allow delete: if isAdmin();
+    }
+
+    match /announcements/{id} {
+      allow get: if true;
+      allow list: if resource.data.status == 'approved' || isAdmin();
+      
+      allow create: if isValidId(id) && 
+                      isValidAnnouncement(request.resource.data) &&
+                      request.resource.data.status == 'pending' &&
+                      request.resource.data.createdAt == request.time &&
+                      request.resource.data.expiresAt > request.time;
+      
+      allow update: if isAdmin() && 
+                      isValidAnnouncement(request.resource.data);
       
       allow delete: if isAdmin();
     }
