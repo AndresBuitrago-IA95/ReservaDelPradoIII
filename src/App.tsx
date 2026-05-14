@@ -203,6 +203,14 @@ export default function App() {
     return phone.replace(/\D/g, '');
   };
 
+  const formatInstagramUrl = (instagram: string | undefined | null) => {
+    if (!instagram) return "";
+    const clean = instagram.trim();
+    if (clean.startsWith('http')) return clean;
+    const handle = clean.startsWith('@') ? clean.substring(1) : clean;
+    return `https://instagram.com/${handle}`;
+  };
+
   const updateConfig = async (newConfig: AppConfig) => {
     try {
       await setDoc(doc(db, 'configs', 'main'), newConfig);
@@ -547,7 +555,7 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           {item.instagram && (
                             <a 
-                              href={item.instagram.startsWith('@') ? `https://instagram.com/${item.instagram.substring(1)}` : item.instagram}
+                              href={formatInstagramUrl(item.instagram)}
                               target="_blank"
                               rel="noreferrer"
                               className="w-10 h-10 rounded-full border border-pink-100 flex items-center justify-center text-pink-500 hover:bg-pink-500 hover:text-white transition-all shadow-sm active:scale-95"
@@ -791,7 +799,7 @@ export default function App() {
                     </div>
                     <div>
                       <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block text-brand-green">Instagram (Opcional)</label>
-                      <input name="instagram" placeholder="@tu_cuenta" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 focus:border-brand-green/30 outline-none" />
+                      <input name="instagram" placeholder="Ej: @tu_negocio o link" className="w-full px-5 py-3 rounded-2xl bg-gray-50 border border-gray-100 focus:border-brand-green/30 outline-none" />
                     </div>
                     <div>
                       <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 block">Descripción</label>
